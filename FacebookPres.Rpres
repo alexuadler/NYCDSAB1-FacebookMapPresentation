@@ -1,0 +1,129 @@
+---
+title: Everything you wanted to know about recreating the facebook graphic...
+author: Alex Adler
+date: 2/6/15
+output:ioslides_presentation
+---
+
+Everything you wanted to know about recreating the facebook graphic...
+========================================================
+
+
+...but were afraid to ask for fear of having to present it tomorrow.
+========================================================
+
+
+The Capabilities of Plotting in R
+========================================================
+![Facebook Friends](facebook-plot.png)
+Connecting friends across cities by Facebook (credit: Paul Butler, *Visualizing Friendships*)
+
+What is striking about this plot?
+========================================================
+
+- Great Circle Arcs
+- ggplot2
+- Cool Coloring
+- No mapping package
+
+Great Circle Arcs
+========================================================
+This can be done with the geosphere library and in particular gcIntermediate()
+```{r}
+library(ggmap)
+library(geosphere)
+nyc<-geocode('New York City')
+sfo<-geocode('San Francisco')
+inter1<-gcIntermediate(nyc,sfo,n=50,addStartEnd=TRUE)
+inter1
+```
+http://flowingdata.com/2011/05/11/how-to-map-connections-with-great-circles/
+
+Great Circle Arcs
+========================================================
+For now, let's use a map because we're only dealing with several points.
+
+```{r}
+library(maps)
+xlim <- c(-171.738281, -56.601563)
+ylim <- c(12.039321, 71.856229)
+USMap<-map_data("usa")
+xlim <- c(-171.738281, -56.601563)
+ylim <- c(12.039321, 71.856229)
+USMap<-map("world", col="#f2f2f2", fill=TRUE, bg="white", lwd=0.05, xlim=xlim, ylim=ylim)
+```
+
+Great Circle Arcs
+========================================================
+
+Set up the points for airports, the origin airports, and the destination airports
+
+```{r}
+airports <- read.csv("http://datasets.flowingdata.com/tuts/maparcs/airports.csv", header=TRUE)
+flights <- read.csv("http://datasets.flowingdata.com/tuts/maparcs/flights.csv", header=TRUE, as.is=TRUE)
+major<-c("ATL","LAX","ORD","DFW","DEN","JFK","SFO")
+trips<-flights[flights$airport1 %in% major,]
+
+USAirports<-select(airports, country=="USA", iata, lat, long)
+
+originAirports<-flights[flights$airport1 %in% major,2]
+originLocs<-USAirports[USAirports$iata %in% major,]
+
+destinationAirports<-flights[flights$airport1 %in% major,3]
+destinationLocs<-USAirports[USAirports$iata %in% destinationAirports,]
+
+```
+
+Great Circle Arcs
+========================================================
+
+Putting it all together
+```{r}
+for(i in 1:nrow(trips)){
+  trips$lon.origin[i]<-originLocs[originLocs$iata==trips$airport1[i],3]
+  trips$lat.origin[i]<-originLocs[originLocs$iata==trips$airport1[i],2]
+  
+  trips$lon.dest[i]<-destinationLocs[destinationLocs$iata==trips$airport2[i],3]
+  trips$lat.dest[i]<-destinationLocs[destinationLocs$iata==trips$airport2[i],2]
+}
+
+routes<-NULL
+for(i in 1:nrow(trips)){
+gcirc<-as.data.frame(gcIntermediate(c(trips$lon.origin[i],trips$lat.origin[i]),c(trips$lon.dest[i],trips$lat.dest[i]),n=50,breakAtDateLine=F,addStartEnd=TRUE))
+gcirc$pathID<-i
+gcirc$iata.origin<-trips$airport1[i]
+routes<<-rbind(routes,gcirc)
+}
+
+head(routes,n=10)
+```
+
+ggplot Options
+========================================================
+
+```{r, echo=F}
+library(ggplot2)
+library(grid)
+p<-ggplot()+
+  geom_point(data=airports[airports$country=="USA",],aes(x=long,y=lat),col='#3d838a',size=0.7)+xlim(-130,-60)+ylim(20,56)+
+  theme(plot.margin = unit(c(-1, -1, -1, -1), "cm"),
+        panel.background=element_blank(),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        plot.background=element_rect(fill="#3e4045"),
+        axis.line=element_blank(),
+        axis.text.x=element_blank(),
+        axis.text.y=element_blank(),
+        axis.ticks=element_blank(),
+        axis.title.x=element_blank(),
+        axis.title.y=element_blank(),legend.position="none"
+        )
+arcs<-geom_line(data=as.data.frame(routes), aes(x=lon, y=lat,group=pathID,color=iata.origin),alpha=0.1,size=0.5)
+```
+
+
+Great resources for sexy plots
+========================================================
+http://spatial.ly/2012/06/mapping-worlds-biggest-airlines/
+
+http://rgraphgallery.blogspot.com/2013/04/rg-histogram-bar-chart-over-map.html

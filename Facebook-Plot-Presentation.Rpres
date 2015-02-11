@@ -1,0 +1,175 @@
+Everything you wanted to know about The Facebook Plot...
+========================================================
+author: Alex Adler
+date: 2/6/14
+
+...but were afraid to ask for fear of being asked to present about it tomorrow morning
+========================================================
+
+
+
+The Facebook IPO Plot illustrates ggplot's prowess
+========================================================
+
+![Facebook Friends](facebook-plot.png)
+Connecting friends across cities by Facebook (credit: Paul Butler, *Visualizing Friendships*)
+
+
+What's so attractive about this plot?
+========================================================
+
+- Great Circle Arcs
+- It uses ggplot2
+- Cool Coloring
+- No mapping package
+
+Great Circle Arcs
+========================================================
+"A great circle is the largest circle that can be drawn on any given sphere.... For any two points on the surface of a sphere there is a unique great circle through the two points.""
+
+This can be done with the geosphere library and in particular gcIntermediate()
+```{r}
+library(ggmap)
+library(geosphere)
+nyc<-geocode('New York City')
+sfo<-geocode('San Francisco')
+inter1<-gcIntermediate(nyc,sfo,n=50,addStartEnd=TRUE)
+```
+http://flowingdata.com/2011/05/11/how-to-map-connections-with-great-circles/
+
+
+Great Circle Arcs
+========================================================
+"Get intermediate points on a great circle inbetween the two points used to define the great circle."
+
+```{r, echo=FALSE}
+inter1
+```
+
+
+Great Circle Lines: An Example
+========================================================
+For now, let's use a map because we're only dealing with two points.
+
+```{r}
+library(maps)
+USMap<-map_data("usa")
+xlim <- c(-171.738281, -56.601563)
+ylim <- c(12.039321, 71.856229)
+USMap<-map("world", col="#f2f2f2", fill=TRUE, bg="white", lwd=0.05, xlim=xlim, ylim=ylim)
+lines(inter1)
+```
+
+
+But that's not nearly cool enough...
+========================================================
+
+![Facebook Friends](facebook-plot.png)
+
+
+We need more points: Flying the Friendly Skies
+========================================================
+```{r}
+airports <- read.csv("http://datasets.flowingdata.com/tuts/maparcs/airports.csv", header=TRUE)
+flights <- read.csv("http://datasets.flowingdata.com/tuts/maparcs/flights.csv", header=TRUE, as.is=TRUE)
+major<-c("ATL","LAX","ORD","DFW","DEN","JFK","SFO")
+trips<-flights[flights$airport1 %in% major,]
+```
+
+Clean and arrange the data to get start and end points
+========================================================
+
+```{r}
+library(dplyr)
+USAirports<-select(airports, country=="USA", iata, lat, long)
+
+originAirports<-flights[flights$airport1 %in% major,2]
+originLocs<-USAirports[USAirports$iata %in% major,]
+
+destinationAirports<-flights[flights$airport1 %in% major,3]
+destinationLocs<-USAirports[USAirports$iata %in% destinationAirports,]
+```
+
+Now, compile all the data into a data frame for plotting
+========================================================
+
+```{r}
+for(i in 1:nrow(trips)){
+  trips$lon.origin[i]<-originLocs[originLocs$iata==trips$airport1[i],3]
+  trips$lat.origin[i]<-originLocs[originLocs$iata==trips$airport1[i],2]
+  
+  trips$lon.dest[i]<-destinationLocs[destinationLocs$iata==trips$airport2[i],3]
+  trips$lat.dest[i]<-destinationLocs[destinationLocs$iata==trips$airport2[i],2]
+}
+```
+
+Now, compile all the data into a data frame for plotting
+========================================================
+
+```{r}
+routes<-NULL
+for(i in 1:nrow(trips)){
+gcirc<-as.data.frame(gcIntermediate(c(trips$lon.origin[i],trips$lat.origin[i]),c(trips$lon.dest[i],trips$lat.dest[i]),n=50,breakAtDateLine=F,addStartEnd=TRUE))
+gcirc$pathID<-i
+gcirc$iata.origin<-trips$airport1[i]
+routes<<-rbind(routes,gcirc)
+}
+```
+
+A glimpse at the data frame to be plotted
+========================================================
+
+```{r}
+head(routes,n=10)
+```
+
+ggplot options to finish it all up
+========================================================
+
+```{r}
+library(ggplot2)
+library(grid)
+p<-ggplot()+
+  xlim(-130,-60)+ylim(20,56)+
+  theme(plot.margin = unit(c(-1, -1, -1, -1), "cm"),
+        panel.background=element_blank(),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        plot.background=element_rect(fill="#3e4045"),
+        axis.line=element_blank(),
+        axis.text.x=element_blank(),
+        axis.text.y=element_blank(),
+        axis.ticks=element_blank(),
+        axis.title.x=element_blank(),
+        axis.title.y=element_blank(),legend.position="none"
+        )
+airports<-geom_point(data=airports[airports$country=="USA",],aes(x=long,y=lat),col='#3d838a',size=0.7)
+arcs<-geom_path(data=as.data.frame(routes), aes(x=lon, y=lat,group=pathID,color=iata.origin),alpha=0.2,size=0.5)
+```
+
+Finally something a little nicer looking
+========================================================
+
+```{r}
+p+airports+arcs
+```
+
+PDF export provides even more options
+========================================================
+![Enhance](airports-before-after.png)
+
+Paths to illustrator:
+Adding glows and changing visual aspects in a post-processing step
+
+
+There's a lot of inspiration around
+========================================================
+![Commutes](commute_flows_before_after.jpg)
+http://spatial.ly/2014/11/r-visualisations-design/
+
+And R is a powerful place to start
+========================================================
+
+![relationships](relationship_status_before_after.jpg)
+
+http://spatial.ly/2014/11/r-visualisations-design/
